@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrainBridge Audio Recorder</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-white font-sans flex justify-center items-center min-h-screen p-4">
+
+  <div class="bg-gray-800 p-8 rounded-xl shadow-lg max-w-sm w-full">
+    <h1 class="text-3xl font-semibold text-center mb-6">BrainBridge Audio Recorder</h1>
+
+    <!-- Mic Test Section -->
+    <div id="micTest" class="text-center mb-8">
+      <h3 class="text-lg font-medium text-gray-400 mb-4">Test Your Microphone</h3>
+      <button id="testMicButton" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition ease-in-out duration-300">Start Mic Test</button>
+      <p id="micStatus" class="text-gray-500 mt-4">Mic test not started</p>
+      <audio id="micTestAudio" controls hidden class="mt-4 w-full"></audio>
+    </div>
+
+    <!-- Record Button -->
+    <button id="recordButton" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-md transition ease-in-out duration-300">Start Recording</button>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let micStream = null;
+
+    
+    document.getElementById("recordButton").addEventListener("click", async () => {
+      if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/mp4" });
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.mp4");
+
+          await fetch("/upload", { method: "POST", body: formData });
+        };
+        mediaRecorder.start();
+        document.getElementById("recordButton").innerText = "Stop Recording";
+      } else {
+        mediaRecorder.stop();
+        document.getElementById("recordButton").innerText = "Start Recording";
+      }
+    });
+
+    
+    document.getElementById("testMicButton").addEventListener("click", async () => {
+      const micTestButton = document.getElementById("testMicButton");
+      const micStatus = document.getElementById("micStatus");
+      const audio = document.getElementById("micTestAudio");
+
+      if (!micStream) {
+        
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audio.srcObject = micStream;
+        audio.hidden = false;
+        audio.play();
+        micStatus.innerText = "Mic test in progress...";
+
+        micTestButton.innerText = "Stop Mic Test";
+      } else {
+        
+        micStream.getTracks().forEach(track => track.stop()); // Stop the stream
+        micStream = null;
+        audio.hidden = true;
+        micStatus.innerText = "Mic test stopped";
+
+        micTestButton.innerText = "Start Mic Test";
+      }
+    });
+  </script>
+
+</body>
+
+</html>
