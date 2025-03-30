@@ -17,6 +17,7 @@ export default function Home() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
 
+  const [transcript, setTranscript] = useState(null);
   useEffect(() => {
     let mediaRecorder;
     let audioChunks = [];
@@ -64,6 +65,7 @@ export default function Home() {
 
                 if (response.ok) {
                   const data = await response.json();
+                  setTranscript(data.transcript);
                   setUploadStatus('Recording uploaded successfully!');
                 } else {
                   setUploadStatus('Failed to upload recording');
@@ -242,6 +244,14 @@ export default function Home() {
 
               {/* Audio Player */}
               <audio id="recordedAudio" controls className="mt-6 w-full hidden"></audio>
+
+              {/* Transcript Display */}
+              {transcript && (
+                <div className="mt-4 p-4 bg-gray-700 rounded">
+                  <h2 className="text-xl font-semibold mb-2">Transcript</h2>
+                  <p>{transcript}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -269,7 +279,9 @@ export default function Home() {
       <footer className="bg-black/50 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-gray-400">© 2025 BrainBridge. All rights reserved.</p>
-        </div>
+  
+        
+      </div>
       </footer>
     </div>
   );

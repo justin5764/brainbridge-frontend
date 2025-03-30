@@ -8,18 +8,25 @@ export default async function handler(req, res) {
       
       // Convert the array back to Uint8Array
       const uint8Array = new Uint8Array(audio);
-      
-      // Generate a unique filename using timestamp
-      const filename = `recording_${Date.now()}.mp4`;
-      const filePath = path.join(process.cwd(), 'uploads', filename);
+      const blob = new Blob([uint8Array], { type: 'audio/mp4' });
 
-      // Create the uploads directory if it doesn't exist
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      const formData = new FormData();
+      formData.append('file', blob, 'recording.mp4');
 
-      // Write the audio file to the filesystem
-      fs.writeFileSync(filePath, Buffer.from(uint8Array));
-      
-      return res.status(200).json({ message: 'File saved successfully', filename });
+      // Send to Flask backend for transcription
+      const response = await fetch("http://localhost:5001/transcribe", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+      console.log("Flask response:", data);
+
+      if (!data.transcript) {
+        throw new Error("No transcript returned from Flask");
+      }
+
+      return res.status(200).json({ transcript: data.transcript });
     } catch (error) {
       console.error('Error saving file:', error);
       return res.status(500).json({ message: 'Error saving file' });
