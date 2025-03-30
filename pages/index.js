@@ -14,10 +14,15 @@ const geistMono = Geist_Mono({
 
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
+  const [uploadState, setUploadState] = useState({
+    status: '',  // '', 'uploading', 'success', 'error'
+    message: ''
+  });
   const [audioUrl, setAudioUrl] = useState(null);
 
   const [transcript, setTranscript] = useState(null);
+  const [transcriptHistory, setTranscriptHistory] = useState([]);
+  
   useEffect(() => {
     let mediaRecorder;
     let audioChunks = [];
@@ -28,17 +33,19 @@ export default function Home() {
     const micStatus = document.getElementById("micStatus");
     const recordedAudio = document.getElementById("recordedAudio");
 
-    if (recordButton) {
-      recordButton.addEventListener("click", async () => {
-        if (!mediaRecorder || mediaRecorder.state === "inactive") {
-          try {
-            // Start recording
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
+    async function handleRecordClick() {
+      if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        try {
+          // Start recording
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
 
-            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-            mediaRecorder.onstop = async () => {
+          mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+          mediaRecorder.onstop = async () => {
+            try {
+              setUploadState({ status: '', message: '' });
+              
               const audioBlob = new Blob(audioChunks, { type: "audio/mp4" });
               const arrayBuffer = await audioBlob.arrayBuffer();
               const uint8Array = new Uint8Array(arrayBuffer);
@@ -51,7 +58,10 @@ export default function Home() {
                 recordedAudio.classList.remove("hidden");
               }
 
-              setUploadStatus('Uploading...');
+              setUploadState({ status: 'uploading', message: 'Uploading...' });
+              
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
               try {
                 const response = await fetch("/api/upload", {
                   method: "POST",
@@ -60,73 +70,117 @@ export default function Home() {
                   },
                   body: JSON.stringify({ 
                     audio: Array.from(uint8Array) 
-                  }),
+                  })
                 });
-
+                
                 if (response.ok) {
                   const data = await response.json();
-                  setTranscript(data.transcript);
-                  setUploadStatus('Recording uploaded successfully!');
+                  const newTranscript = data.transcript;
+                  
+                  setTranscript(newTranscript);
+                  
+                  const timestamp = new Date().toLocaleTimeString();
+                  setTranscriptHistory(prevHistory => [
+                    ...prevHistory, 
+                    { text: newTranscript, timestamp, audioUrl: url }
+                  ]);
+                  
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  
+                  setUploadState({ 
+                    status: 'success', 
+                    message: 'Recording uploaded successfully!' 
+                  });
                 } else {
-                  setUploadStatus('Failed to upload recording');
+                  console.error("Upload failed with status:", response.status);
+                  setUploadState({ 
+                    status: 'error', 
+                    message: 'Failed to upload recording' 
+                  });
                 }
-              } catch (error) {
-                console.error("Error uploading:", error);
-                setUploadStatus('Error uploading recording');
+              } catch (uploadError) {
+                console.error("Error during upload:", uploadError);
+                setUploadState({ 
+                  status: 'error', 
+                  message: 'Error connecting to server' 
+                });
               }
-            };
+            } catch (processError) {
+              console.error("Error processing recording:", processError);
+              setUploadState({ 
+                status: 'error', 
+                message: 'Error processing recording' 
+              });
+            }
+          };
 
-            mediaRecorder.start();
-            setIsRecording(true);
-            recordButton.textContent = "Stop Recording";
-            recordButton.classList.remove("bg-indigo-600", "hover:bg-indigo-700");
-            recordButton.classList.add("bg-gray-600", "hover:bg-gray-700");
-          } catch (error) {
-            console.error("Error starting recording:", error);
-            setUploadStatus('Error accessing microphone');
-          }
-        } else {
-          // Stop recording
-          mediaRecorder.stop();
-          setIsRecording(false);
-          recordButton.textContent = "Start Recording";
-          recordButton.classList.remove("bg-gray-600", "hover:bg-gray-700");
-          recordButton.classList.add("bg-indigo-600", "hover:bg-indigo-700");
-
-          // Stop all tracks in the stream
-          mediaRecorder.stream.getTracks().forEach(track => track.stop());
+          mediaRecorder.start();
+          setIsRecording(true);
+          recordButton.textContent = "Stop Recording";
+          recordButton.classList.remove("bg-indigo-600", "hover:bg-indigo-700");
+          recordButton.classList.add("bg-gray-600", "hover:bg-gray-700");
+        } catch (error) {
+          console.error("Error starting recording:", error);
+          setUploadState({ 
+            status: 'error', 
+            message: 'Error accessing microphone' 
+          });
         }
-      });
+      } else {
+        // Stop recording
+        mediaRecorder.stop();
+        setIsRecording(false);
+        recordButton.textContent = "Start Recording";
+        recordButton.classList.remove("bg-gray-600", "hover:bg-gray-700");
+        recordButton.classList.add("bg-indigo-600", "hover:bg-indigo-700");
+
+        // Stop all tracks in the stream
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+    }
+
+    async function handleMicTest() {
+      try {
+        if (!micStream) {
+          // Start mic test
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStatus.textContent = "Microphone is working!";
+          micStatus.classList.add("text-green-500");
+          testMicButton.textContent = "Stop Mic Test";
+        } else {
+          // Stop mic test
+          micStream.getTracks().forEach(track => track.stop());
+          micStream = null;
+          micStatus.textContent = "Mic test stopped";
+          micStatus.classList.remove("text-green-500");
+          testMicButton.textContent = "Start Mic Test";
+        }
+      } catch (error) {
+        console.error("Error accessing microphone:", error);
+        micStatus.textContent = "Error accessing microphone";
+        micStatus.classList.add("text-red-500");
+      }
+    }
+
+    // Add event listeners
+    if (recordButton) {
+      recordButton.addEventListener("click", handleRecordClick);
     }
 
     if (testMicButton) {
-      // Handle mic test functionality
-      testMicButton.addEventListener("click", async () => {
-        try {
-          if (!micStream) {
-            // Start mic test
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            micStatus.textContent = "Microphone is working!";
-            micStatus.classList.add("text-green-500");
-            testMicButton.textContent = "Stop Mic Test";
-          } else {
-            // Stop mic test
-            micStream.getTracks().forEach(track => track.stop());
-            micStream = null;
-            micStatus.textContent = "Mic test stopped";
-            micStatus.classList.remove("text-green-500");
-            testMicButton.textContent = "Start Mic Test";
-          }
-        } catch (error) {
-          console.error("Error accessing microphone:", error);
-          micStatus.textContent = "Error accessing microphone";
-          micStatus.classList.add("text-red-500");
-        }
-      });
+      testMicButton.addEventListener("click", handleMicTest);
     }
 
     // Cleanup function
     return () => {
+      if (recordButton) {
+        recordButton.removeEventListener("click", handleRecordClick);
+      }
+      
+      if (testMicButton) {
+        testMicButton.removeEventListener("click", handleMicTest);
+      }
+      
       if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
@@ -138,7 +192,12 @@ export default function Home() {
         URL.revokeObjectURL(audioUrl);
       }
     };
-  }, [audioUrl]); // Add audioUrl to dependency array
+  }, []);
+
+  // Function to clear transcript history
+  const clearHistory = () => {
+    setTranscriptHistory([]);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
@@ -230,26 +289,55 @@ export default function Home() {
               </button>
 
               {/* Upload Status */}
-              {uploadStatus && (
+              {uploadState.message && (
                 <p className={`mt-4 text-center ${
-                  uploadStatus.includes('successfully') 
+                  uploadState.status === 'uploading' 
+                    ? 'text-blue-400'
+                    : uploadState.status === 'success'
                     ? 'text-green-500' 
-                    : uploadStatus.includes('Error') || uploadStatus.includes('Failed')
+                    : uploadState.status === 'error'
                     ? 'text-red-500'
                     : 'text-gray-400'
                 }`}>
-                  {uploadStatus}
+                  {uploadState.message}
                 </p>
               )}
 
               {/* Audio Player */}
               <audio id="recordedAudio" controls className="mt-6 w-full hidden"></audio>
 
-              {/* Transcript Display */}
+              {/* Current Transcript Display */}
               {transcript && (
                 <div className="mt-4 p-4 bg-gray-700 rounded">
-                  <h2 className="text-xl font-semibold mb-2">Transcript</h2>
+                  <h2 className="text-xl font-semibold mb-2">Current Transcript</h2>
                   <p>{transcript}</p>
+                </div>
+              )}
+              
+              {/* Transcript History Section */}
+              {transcriptHistory.length > 0 && (
+                <div className="mt-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-xl font-semibold">Transcript History</h2>
+                    <button 
+                      onClick={clearHistory}
+                      className="text-xs px-2 py-1 bg-red-500 hover:bg-red-600 rounded transition"
+                    >
+                      Clear History
+                    </button>
+                  </div>
+                  <div className="mt-2 p-4 bg-gray-700 rounded max-h-80 overflow-y-auto">
+                    {transcriptHistory.slice().reverse().map((item, index) => (
+                      <div key={index} className="mb-4 pb-4 border-b border-gray-600 last:border-0">
+                        <div className="flex justify-between text-sm text-gray-400 mb-1">
+                          <span>Recording {transcriptHistory.length - index}</span>
+                          <span>{item.timestamp}</span>
+                        </div>
+                        <p className="mb-2">{item.text}</p>
+                        <audio src={item.audioUrl} controls className="w-full h-8"></audio>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -279,9 +367,7 @@ export default function Home() {
       <footer className="bg-black/50 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-gray-400">© 2025 BrainBridge. All rights reserved.</p>
-  
-        
-      </div>
+        </div>
       </footer>
     </div>
   );
