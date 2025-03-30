@@ -12,24 +12,39 @@ export default async function handler(req, res) {
 
       const formData = new FormData();
       formData.append('file', blob, 'recording.mp4');
-
-      // Send to Flask backend for transcription
-      const response = await fetch("http://localhost:5001/transcribe", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
-      console.log("Flask response:", data);
-
-      if (!data.transcript) {
-        throw new Error("No transcript returned from Flask");
+      
+      try {
+        console.log("Attempting to connect to Flask backend...");
+        // Send to Flask backend for transcription
+        const response = await fetch("http://localhost:5001/transcribe", {
+          method: "POST",
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Flask server returned status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Flask response:", data);
+        
+        if (!data.transcript) {
+          throw new Error("No transcript returned from Flask");
+        }
+        
+        return res.status(200).json({ transcript: data.transcript });
+      } catch (fetchError) {
+        console.error("Error connecting to Flask backend:", fetchError);
+        return res.status(200).json({ 
+          transcript: "Could not connect to transcription service. Your audio was recorded successfully, but transcription is unavailable."
+        });
       }
-
-      return res.status(200).json({ transcript: data.transcript });
     } catch (error) {
-      console.error('Error saving file:', error);
-      return res.status(500).json({ message: 'Error saving file' });
+      console.error('Error processing audio:', error);
+      return res.status(500).json({ 
+        message: 'Error processing audio file',
+        error: error.message 
+      });
     }
   } else {
     res.setHeader('Allow', ['POST']);
