@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export default function Home() {
+  const [transcript, setTranscript] = useState(null);
   useEffect(() => {
     let mediaRecorder;
     let audioChunks = [];
@@ -47,6 +48,8 @@ export default function Home() {
             });
 
             if (response.ok) {
+              const data = await response.json();
+              setTranscript(data.transcript);
               alert("Recording uploaded successfully!");
             } else {
               alert("Failed to upload recording");
@@ -114,6 +117,14 @@ export default function Home() {
         {/* Record Button */}
         <button id="recordButton" className="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-md transition ease-in-out duration-300">Start Recording</button>
         <audio id="recordedAudio" controls className="mt-4 w-full hidden"></audio>
+
+        {/* Transcript Display */}
+        {transcript && (
+          <div className="mt-4 p-4 bg-gray-700 rounded">
+            <h2 className="text-xl font-semibold mb-2">Transcript</h2>
+            <p>{transcript}</p>
+          </div>
+        )}
       </div>
     </div>
   );
