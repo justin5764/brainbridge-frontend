@@ -76,13 +76,13 @@ export default function Home() {
                 if (response.ok) {
                   const data = await response.json();
                   const newTranscript = data.transcript;
-                  
+            
                   setTranscript(newTranscript);
                   
                   const timestamp = new Date().toLocaleTimeString();
                   setTranscriptHistory(prevHistory => [
                     ...prevHistory, 
-                    { text: newTranscript, timestamp, audioUrl: url }
+                    { segments: newTranscript, timestamp, audioUrl: url }
                   ]);
                   
                   await new Promise(resolve => setTimeout(resolve, 200));
@@ -307,10 +307,20 @@ export default function Home() {
               <audio id="recordedAudio" controls className="mt-6 w-full hidden"></audio>
 
               {/* Current Transcript Display */}
-              {transcript && (
+              {transcript && Array.isArray(transcript) && transcript.length > 0 && (
                 <div className="mt-4 p-4 bg-gray-700 rounded">
                   <h2 className="text-xl font-semibold mb-2">Current Transcript</h2>
-                  <p>{transcript}</p>
+                  {transcript.map((segment, index) => (
+                    <div key={index} className="mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold">{segment.speaker}</span>
+                        <span className="text-xs text-gray-400">
+                          ({segment.start.toFixed(2)}s - {segment.end.toFixed(2)}s)
+                        </span>
+                      </div>
+                      <p>{segment.text}</p>
+                    </div>
+                  ))}
                 </div>
               )}
               
@@ -327,16 +337,26 @@ export default function Home() {
                     </button>
                   </div>
                   <div className="mt-2 p-4 bg-gray-700 rounded max-h-80 overflow-y-auto">
-                    {transcriptHistory.slice().reverse().map((item, index) => (
-                      <div key={index} className="mb-4 pb-4 border-b border-gray-600 last:border-0">
-                        <div className="flex justify-between text-sm text-gray-400 mb-1">
-                          <span>Recording {transcriptHistory.length - index}</span>
-                          <span>{item.timestamp}</span>
-                        </div>
-                        <p className="mb-2">{item.text}</p>
-                        <audio src={item.audioUrl} controls className="w-full h-8"></audio>
+                  {transcriptHistory.slice().reverse().map((item, index) => (
+                    <div key={index} className="mb-4 pb-4 border-b border-gray-600 last:border-0">
+                      <div className="flex justify-between text-sm text-gray-400 mb-1">
+                        <span>Recording {transcriptHistory.length - index}</span>
+                        <span>{item.timestamp}</span>
                       </div>
-                    ))}
+                      {Array.isArray(item) && item.segments.map((segment, idx) => (
+                        <div key={idx} className="mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold">{segment.speaker}</span>
+                            <span className="text-xs text-gray-400">
+                              ({segment.start.toFixed(2)}s - {segment.end.toFixed(2)}s)
+                            </span>
+                          </div>
+                          <p>{segment.text}</p>
+                        </div>
+                      ))}
+                      <audio src={item.audioUrl} controls className="w-full h-8 mt-2"></audio>
+                    </div>
+                  ))}
                   </div>
                 </div>
               )}
