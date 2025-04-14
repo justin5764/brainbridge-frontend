@@ -16,7 +16,11 @@ export default async function handler(req, res) {
       try {
         console.log("Attempting to connect to Flask backend...");
         // Send to Flask backend for transcription
-        const response = await fetch("http://localhost:5001/transcribe", {
+        const apiUrl = process.env.NODE_ENV === 'production' 
+          ? "/api/transcribe"  // In production use relative URL
+          : "http://localhost:5001/api/transcribe"; // In development use localhost
+        
+        const response = await fetch(apiUrl, {
           method: "POST",
           body: formData
         });
