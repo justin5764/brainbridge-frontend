@@ -343,7 +343,7 @@ export default function Home() {
                         <span>Recording {transcriptHistory.length - index}</span>
                         <span>{item.timestamp}</span>
                       </div>
-                      {Array.isArray(item) && item.segments.map((segment, idx) => (
+                      {item.segments && Array.isArray(item.segments) && item.segments.map((segment, idx) => (
                         <div key={idx} className="mb-2">
                           <div className="flex items-center space-x-2">
                             <span className="font-bold">{segment.speaker}</span>
